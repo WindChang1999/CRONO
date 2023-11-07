@@ -149,6 +149,7 @@ int main(int argc, char** argv)
    int DEG = 0;                       //Edges per vertex
    const int select = atoi(argv[1]);  //0 for synthetic, 1 for file read
    char filename[100];
+   int rt = 0;
 
    //For graph through file input
    if(select==1)
@@ -158,6 +159,7 @@ int main(int argc, char** argv)
       strcpy(filename,argv[3]);
       //filename = argv[2];
       f = fopen(filename,"r");
+      if (argc > 4) rt = atoi(argv[4]);
    }
 
    int lines_to_check=0;      //file processing variables
@@ -179,6 +181,7 @@ int main(int argc, char** argv)
       N = atoi(argv[3]);
       DEG = atoi(argv[4]);
       printf("\nGraph with Parameters: N:%d DEG:%d\n",N,DEG);
+      if (argc > 5) rt = atoi(argv[5]);
    }
 
    if (DEG > N)
@@ -354,10 +357,6 @@ int main(int argc, char** argv)
       pthread_mutex_init(&locks[i], NULL);
    }
 
-   //Initialize PageRanks
-   initialize_single_source(PR, Q, 0, N, 0.15);
-   printf("\nInitialization Done");
-
    //Thread arguments
    for(int j = 0; j < P; j++) {
       thread_arg[j].local_min  = local_min_buffer;
@@ -373,47 +372,46 @@ int main(int argc, char** argv)
       thread_arg[j].barrier    = &barrier;
    }
 
-   //Start CPU clock
-   struct timespec requestStart, requestEnd;
-   clock_gettime(CLOCK_REALTIME, &requestStart);
+   struct timespec start, end;
+   clock_gettime(CLOCK_REALTIME, &start);
+   while (true) {
+      initialize_single_source(PR, Q, 0, N, 0.15);
+      dp = 0;
+      //Start CPU clock
+      struct timespec requestStart, requestEnd;
+      clock_gettime(CLOCK_REALTIME, &requestStart);
 
-   // Enable Graphite performance and energy models
-   //CarbonEnableModels();
+      // Enable Graphite performance and energy models
+      //CarbonEnableModels();
 
-   //Spawn Threads
-   for(int j = 1; j < P; j++) {
-      pthread_create(thread_handle+j,
-            NULL,
-            do_work,
-            (void*)&thread_arg[j]);
+      //Spawn Threads
+      for(int j = 1; j < P; j++) {
+         pthread_create(thread_handle+j,
+               NULL,
+               do_work,
+               (void*)&thread_arg[j]);
+      }
+      do_work((void*) &thread_arg[0]);  //Spawn main
+
+      //Join threads
+      for(int j = 1; j < P; j++) { //mul = mul*2;
+         pthread_join(thread_handle[j],NULL);
+      }
+
+      // Disable Graphite performance and energy models
+      //CarbonDisableModels();
+
+      //Read clock and print time
+      clock_gettime(CLOCK_REALTIME, &requestEnd);
+      double accum = ( requestEnd.tv_sec - requestStart.tv_sec ) + ( requestEnd.tv_nsec - requestStart.tv_nsec ) / BILLION;
+      printf( "%lf\n", accum );
+
+      //printf("\ndistance:%d \n",D[N-1]);
+      clock_gettime(CLOCK_REALTIME, &end);
+      double runtime = ( end.tv_sec - start.tv_sec ) + 
+         ( end.tv_nsec - start.tv_nsec ) / BILLION;
+      if (runtime > rt) break;
    }
-   do_work((void*) &thread_arg[0]);  //Spawn main
-
-   //Join threads
-   for(int j = 1; j < P; j++) { //mul = mul*2;
-      pthread_join(thread_handle[j],NULL);
-   }
-
-   // Disable Graphite performance and energy models
-   //CarbonDisableModels();
-
-   //Read clock and print time
-   clock_gettime(CLOCK_REALTIME, &requestEnd);
-   double accum = ( requestEnd.tv_sec - requestStart.tv_sec ) + ( requestEnd.tv_nsec - requestStart.tv_nsec ) / BILLION;
-   printf( "\nTime:%lf seconds\n", accum );
-
-   //printf("\ndistance:%d \n",D[N-1]);
-
-   //Print pageranks to file
-   FILE *f1 = fopen("file.txt", "w");
-
-   for(int i = 0; i < N; i++) {
-      if(exist[i]==1)
-         fprintf(f1,"pr(%d) = %f\n", i,PR[i]);
-   }
-   printf("\n");
-   fclose(f1);
-
    return 0;
 }
 

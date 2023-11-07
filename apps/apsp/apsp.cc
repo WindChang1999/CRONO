@@ -42,7 +42,7 @@ void init_weights(int N, int DEG, int** W, int** W_index);
 int min = INT_MAX;    //For local mins
 int min_index = 0;
 pthread_mutex_t lock;
-pthread_mutex_t locks[4194304];  //unused
+// pthread_mutex_t locks[4194304];  //unused
 int u = 0;                       //next best vertex
 int local_min_buffer[1024];
 int global_min_buffer;
@@ -99,9 +99,9 @@ void* do_work(void* args)
          }
       }
 
-       pthread_mutex_lock(&lock);   //Vertex Capture
-       node++;
-       pthread_mutex_unlock(&lock);
+      pthread_mutex_lock(&lock);   //Vertex Capture
+      node++;
+      pthread_mutex_unlock(&lock);
    }
 
    pthread_barrier_wait(arg->barrier_total);
@@ -114,6 +114,10 @@ int main(int argc, char** argv)
    const int P1 = atoi(argv[1]);
    const int N = atoi(argv[2]);
    const int DEG = atoi(argv[3]);
+   int rt = 0;
+   if (argc > 4) {
+      rt = atoi(argv[4]);
+   }
 
    int P = 256;
    start = P1;
@@ -148,7 +152,7 @@ int main(int argc, char** argv)
          exit(EXIT_FAILURE);
       }
    }
-   
+
    //Initialize random graph
    init_weights(N, DEG, W, W_index);
 
@@ -156,8 +160,6 @@ int main(int argc, char** argv)
    pthread_barrier_init(&barrier_total, NULL, P1);
    pthread_barrier_init(&barrier, NULL, P1);
    pthread_mutex_init(&lock, NULL);
-   for(int i=0; i<2097152; i++)
-      pthread_mutex_init(&locks[i], NULL);
 
    //Thread Arguments
    for(int j = 0; j < P1; j++) {
@@ -176,43 +178,48 @@ int main(int argc, char** argv)
       thread_arg[j].barrier    = &barrier;
    }
 
-   //Measure CPU time
-   struct timespec requestStart, requestEnd;
-   clock_gettime(CLOCK_REALTIME, &requestStart);
+   struct timespec start, end;
+   clock_gettime(CLOCK_REALTIME, &start);
+   while (true) {
+      //Measure CPU time
+      struct timespec requestStart, requestEnd;
+      clock_gettime(CLOCK_REALTIME, &requestStart);
 
-   // Enable Graphite performance and energy models
-   //CarbonEnableModels();
+      // Enable Graphite performance and energy models
+      //CarbonEnableModels();
 
-   //Spawn Threads
-   for(int j = 1; j < P1; j++) {
-      pthread_create(thread_handle+j,
-            NULL,
-            do_work,
-            (void*)&thread_arg[j]);
+      //Spawn Threads
+      for(int j = 1; j < P1; j++) {
+         pthread_create(thread_handle+j,
+               NULL,
+               do_work,
+               (void*)&thread_arg[j]);
+      }
+      do_work((void*) &thread_arg[0]);
+
+      //Join Threads
+      for(int j = 1; j < P1; j++) { //mul = mul*2;
+         pthread_join(thread_handle[j],NULL);
+      }
+
+      // Disable Graphite performance and energy models
+      //CarbonDisableModels();
+
+      clock_gettime(CLOCK_REALTIME, &requestEnd);
+      double accum = ( requestEnd.tv_sec - requestStart.tv_sec ) + ( requestEnd.tv_nsec - requestStart.tv_nsec ) / BILLION;
+      printf( "%lf\n", accum);
+
+      /*for(int i = 0; i < N; i++) {
+        printf(" %d ", D[i]);
+        }
+        printf("\n");
+        */
+
+      clock_gettime(CLOCK_REALTIME, &end);
+      double runtime = ( end.tv_sec - start.tv_sec ) + 
+         ( end.tv_nsec - start.tv_nsec ) / BILLION;
+      if (runtime > rt) break;
    }
-   do_work((void*) &thread_arg[0]);
-
-   printf("\nThreads Returned!");
-
-   //Join Threads
-   for(int j = 1; j < P1; j++) { //mul = mul*2;
-      pthread_join(thread_handle[j],NULL);
-   }
-
-   // Disable Graphite performance and energy models
-   //CarbonDisableModels();
-
-   printf("\nThreads Joined!");
-
-   clock_gettime(CLOCK_REALTIME, &requestEnd);
-   double accum = ( requestEnd.tv_sec - requestStart.tv_sec ) + ( requestEnd.tv_nsec - requestStart.tv_nsec ) / BILLION;
-   printf( "\nTime: %lf seconds\n", accum );
-
-   /*for(int i = 0; i < N; i++) {
-     printf(" %d ", D[i]);
-     }
-     printf("\n");
-     */
    return 0;
 }
 

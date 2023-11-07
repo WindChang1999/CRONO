@@ -218,11 +218,14 @@ int main(int argc, char** argv)
 
    const int select = atoi(argv[1]);
    const int P = atoi(argv[2]);
+   int rt = 0;
+
    if(select==0)
    {
       N = atoi(argv[3]);
       DEG = atoi(argv[4]);
       printf("\nGraph with Parameters: N:%d DEG:%d\n",N,DEG);
+      if (argc > 5) rt = atoi(argv[5]);
    }
 
    if (!P) {
@@ -240,6 +243,7 @@ int main(int argc, char** argv)
       }
       N = 2000000;  //can be read from file if needed, this is a default upper limit
       DEG = 16;     //also can be reda from file if needed, upper limit here again
+      if (argc > 4) rt = atoi(argv[4]);
    }
 
    int lines_to_check=0;
@@ -375,9 +379,6 @@ int main(int argc, char** argv)
          exist[i]=1;
    } 
 
-   //Initialize data structures
-   initialize_single_source(D, Q, 0, N);
-
    //Thread Arguments
    for(int j = 0; j < P; j++) {
       thread_arg[j].local_min  = local_min_buffer;
@@ -394,51 +395,48 @@ int main(int argc, char** argv)
       thread_arg[j].barrier    = &barrier;
    }
 
-   //for clock time
-   struct timespec requestStart, requestEnd;
-   clock_gettime(CLOCK_REALTIME, &requestStart);
 
-   // Enable Graphite performance and energy models
-   //CarbonEnableModels();
+   struct timespec start, end;
+   clock_gettime(CLOCK_REALTIME, &start);
+   while (true) {
+      //Initialize data structures
+      initialize_single_source(D, Q, 0, N);
+      terminate = 0;
+      //for clock time
+      struct timespec requestStart, requestEnd;
+      clock_gettime(CLOCK_REALTIME, &requestStart);
 
-   //create threads
-   for(int j = 1; j < P; j++) {
-      pthread_create(thread_handle+j,
-            NULL,
-            do_work,
-            (void*)&thread_arg[j]);
-   }
-   do_work((void*) &thread_arg[0]);
+      // Enable Graphite performance and energy models
+      //CarbonEnableModels();
 
-   //join threads
-   for(int j = 1; j < P; j++) { //mul = mul*2;
-      pthread_join(thread_handle[j],NULL);
-   }
-
-   // Disable Graphite performance and energy models
-   //CarbonDisableModels();
-
-   //read clock for time
-   clock_gettime(CLOCK_REALTIME, &requestEnd);
-   double accum = ( requestEnd.tv_sec - requestStart.tv_sec ) + ( requestEnd.tv_nsec - requestStart.tv_nsec ) / BILLION;
-   printf( "Elapsed time: %lfs\n", accum );
-
-   //printf("\ndistance:%d \n",D[N-1]);
-
-   make_dot_graph(W,W_index,exist,D,N,DEG,"rgraph.dot");
-
-   //for distance values check
-   FILE * pfile;
-   pfile = fopen("myfile.txt","w");
-   fprintf (pfile,"distances:\n");
-   for(int i = 0; i < N; i++) {
-      if(D[i] != INT_MAX) {
-         fprintf(pfile,"distance(%d) = %d\n", i, D[i]);
+      //create threads
+      for(int j = 1; j < P; j++) {
+         pthread_create(thread_handle+j,
+               NULL,
+               do_work,
+               (void*)&thread_arg[j]);
       }
-   }
-   fclose(pfile);
-   printf("\n");
+      do_work((void*) &thread_arg[0]);
 
+      //join threads
+      for(int j = 1; j < P; j++) { //mul = mul*2;
+         pthread_join(thread_handle[j],NULL);
+      }
+
+      // Disable Graphite performance and energy models
+      //CarbonDisableModels();
+
+      //read clock for time
+      clock_gettime(CLOCK_REALTIME, &requestEnd);
+      double accum = ( requestEnd.tv_sec - requestStart.tv_sec ) + ( requestEnd.tv_nsec - requestStart.tv_nsec ) / BILLION;
+      printf("%lf\n", accum );
+
+      //printf("\ndistance:%d \n",D[N-1]);
+      clock_gettime(CLOCK_REALTIME, &end);
+      double runtime = ( end.tv_sec - start.tv_sec ) + 
+         ( end.tv_nsec - start.tv_nsec ) / BILLION;
+      if (runtime > rt) break;
+   }
    return 0;
 }
 

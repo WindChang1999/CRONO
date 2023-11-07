@@ -139,6 +139,7 @@ int main(int argc, char** argv)
    FILE *file0 = NULL;
    int N = 0;
    int DEG = 0;
+   int rt = 0;
    //whether read from file or generate synthetic
    const int select = atoi(argv[1]);
 
@@ -149,6 +150,7 @@ int main(int argc, char** argv)
       //printf("Please Enter The Name Of The File You Would Like To Fetch\n");
       //scanf("%s", filename);
       file0 = fopen(filename,"r");
+      if (argc > 4) rt = atoi(argv[4]);
    }
 
    int lines_to_check=0;
@@ -175,6 +177,7 @@ int main(int argc, char** argv)
       N = atoi(argv[3]);
       DEG = atoi(argv[4]); avg_deg = DEG;
       printf("\nGraph with Parameters: N:%d DEG:%d\n",N,DEG);
+      if (argc > 5) rt = atoi(argv[5]);
    }
 
    if (DEG > N)
@@ -307,8 +310,6 @@ int main(int argc, char** argv)
    }
    //printf("\n %d %d %d",N,largest,Total);
 
-   //Initialize Data Structures
-   initialize_single_source(D, Q, 0, N);
 
    //Thread arguments
    for(int j = 0; j < P; j++) {
@@ -329,38 +330,47 @@ int main(int argc, char** argv)
 
    // Enable Graphite performance and energy models
    //CarbonEnableModels();
+   struct timespec start, end;
+   clock_gettime(CLOCK_REALTIME, &start);
+   while (true) {
+      //Initialize Data Structures
+      initialize_single_source(D, Q, 0, N);
+      terminate = 0;
+      //CPU Time
+      struct timespec requestStart, requestEnd;
+      clock_gettime(CLOCK_REALTIME, &requestStart);
 
-   //CPU Time
-   struct timespec requestStart, requestEnd;
-   clock_gettime(CLOCK_REALTIME, &requestStart);
+      //Spawn Threads
+      for(int j = 1; j < P; j++) {
+         pthread_create(thread_handle+j,
+               NULL,
+               do_work,
+               (void*)&thread_arg[j]);
+      }
+      do_work((void*) &thread_arg[0]);  //master thread initializes itself
 
-   //Spawn Threads
-   for(int j = 1; j < P; j++) {
-      pthread_create(thread_handle+j,
-            NULL,
-            do_work,
-            (void*)&thread_arg[j]);
+      //Join threads
+      for(int j = 1; j < P; j++) { //mul = mul*2;
+         pthread_join(thread_handle[j],NULL);
+      }
+
+
+      clock_gettime(CLOCK_REALTIME, &requestEnd);
+      double accum = ( requestEnd.tv_sec - requestStart.tv_sec ) + ( requestEnd.tv_nsec - requestStart.tv_nsec ) / BILLION;
+      printf( "%lf\n", accum );
+
+   	 /*for(int j=0;j<N;j++)
+   	 {if(Q[j]==0)
+   		 printf(" %d ",Q[j]);
+   	 }*/
+
+      // Disable Graphite performance and energy models
+      //CarbonDisableModels();
+      clock_gettime(CLOCK_REALTIME, &end);
+      double runtime = ( end.tv_sec - start.tv_sec ) + 
+         ( end.tv_nsec - start.tv_nsec ) / BILLION;
+      if (runtime > rt) break;
    }
-   do_work((void*) &thread_arg[0]);  //master thread initializes itself
-
-   //Join threads
-   for(int j = 1; j < P; j++) { //mul = mul*2;
-      pthread_join(thread_handle[j],NULL);
-   }
-
-   printf("\nThreads Joined!");
-
-   clock_gettime(CLOCK_REALTIME, &requestEnd);
-   double accum = ( requestEnd.tv_sec - requestStart.tv_sec ) + ( requestEnd.tv_nsec - requestStart.tv_nsec ) / BILLION;
-   printf( "\nTime Taken:\n%lf seconds", accum );
-
-	 /*for(int j=0;j<N;j++)
-	 {if(Q[j]==0)
-		 printf(" %d ",Q[j]);
-	 }*/
-
-   // Disable Graphite performance and energy models
-   //CarbonDisableModels();
 
    return 0;
 }
