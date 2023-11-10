@@ -147,6 +147,7 @@ int main(int argc, char** argv)
    int DEG = 0; //edges per vertex
    FILE *file0 = NULL;
    int select = atoi(argv[1]);
+   int rt = 0;
 
    //char filename[100];
    //If graph to be read from file
@@ -156,15 +157,17 @@ int main(int argc, char** argv)
       //printf("Please Enter The Name Of The File You Would Like To Fetch\n");
       //scanf("%s", filename);
       file0 = fopen(filename,"r");
+      if (argc > 4) rt = atoi(argv[4]);
    }
    
    //Matrix .mtx file
    if(select==2)
    {
-     const char *filename = argv[3];
-     mtx(filename);
-     //select = 1;
-     file0 = fopen(conv_file,"r");
+      const char *filename = argv[3];
+      mtx(filename);
+      //select = 1;
+      file0 = fopen(conv_file,"r");
+      if (argc > 4) rt = atoi(argv[4]);
    }
 
    int lines_to_check=0;
@@ -235,7 +238,7 @@ int main(int argc, char** argv)
           DEG = temp[i];
       }
       free(temp);
-      printf("\n .gr graph with parameters: Vertices:%d Degree:%d \n",N,DEG);
+      // printf("\n .gr graph with parameters: Vertices:%d Degree:%d \n",N,DEG);
    }
    
    if(select==2)
@@ -255,7 +258,8 @@ int main(int argc, char** argv)
    {
       N = atoi(argv[3]);      //Number of Vertices
       DEG = atoi(argv[4]);    //Edges per vertex
-      printf("\nGraph with Parameters: N:%d DEG:%d\n",N,DEG);
+      // printf("\nGraph with Parameters: N:%d DEG:%d\n",N,DEG);
+      if (argc > 5) rt = atoi(argv[5]);
    }
 
    if (DEG > N)
@@ -359,7 +363,7 @@ int main(int argc, char** argv)
             //exist[number0]=1; exist[number1]=1;
          }
       }
-      printf("\nFile Read, Largest Vertex:%d",largest);
+      // printf("\nFile Read, Largest Vertex:%d",largest);
    }
 
    //Generate graph synthetically
@@ -385,8 +389,6 @@ int main(int argc, char** argv)
       //   pthread_mutex_init(&locks[i], NULL);
    }
 
-   //Initialize arrays
-   initialize_single_source(D, Q, 0, largest);
 
    //Thread arguments
    for(int j = 0; j < P; j++) {
@@ -405,60 +407,45 @@ int main(int argc, char** argv)
       thread_arg[j].barrier    = &barrier;
    }
 
-   //CPU clock
-   struct timespec requestStart, requestEnd;
-   clock_gettime(CLOCK_REALTIME, &requestStart);
-
-   // Enable Graphite performance and energy models
-   //CarbonEnableModels();
-
-   //Spawn threads
-   for(int j = 1; j < P; j++) {
-      pthread_create(thread_handle+j,
-            NULL,
-            do_work,
-            (void*)&thread_arg[j]);
+   struct timespec start, end;
+   clock_gettime(CLOCK_REALTIME, &start);
+   while (true) {
+      //Initialize arrays
+      initialize_single_source(D, Q, 0, largest);
+      change = 0;
+       
+      //CPU clock
+      struct timespec requestStart, requestEnd;
+      clock_gettime(CLOCK_REALTIME, &requestStart);
+   
+      // Enable Graphite performance and energy models
+      //CarbonEnableModels();
+   
+      //Spawn threads
+      for(int j = 1; j < P; j++) {
+         pthread_create(thread_handle+j,
+               NULL,
+               do_work,
+               (void*)&thread_arg[j]);
+      }
+      do_work((void*) &thread_arg[0]);  //main spawns itself
+   
+      //Join threads
+      for(int j = 1; j < P; j++) { //mul = mul*2;
+         pthread_join(thread_handle[j],NULL);
+      }
+   
+      // Disable Graphite performance and energy models
+      //CarbonDisableModels();
+   
+      clock_gettime(CLOCK_REALTIME, &requestEnd);
+      double accum = ( requestEnd.tv_sec - requestStart.tv_sec ) + ( requestEnd.tv_nsec - requestStart.tv_nsec ) / BILLION;
+      printf( "%lf\n", accum );
+      clock_gettime(CLOCK_REALTIME, &end);
+      double runtime = ( end.tv_sec - start.tv_sec ) + 
+         ( end.tv_nsec - start.tv_nsec ) / BILLION;
+      if (runtime > rt) break;
    }
-   do_work((void*) &thread_arg[0]);  //main spawns itself
-
-   //Join threads
-   for(int j = 1; j < P; j++) { //mul = mul*2;
-      pthread_join(thread_handle[j],NULL);
-   }
-
-   // Disable Graphite performance and energy models
-   //CarbonDisableModels();
-
-   printf("\nThreads Joined!");
-
-   clock_gettime(CLOCK_REALTIME, &requestEnd);
-   double accum = ( requestEnd.tv_sec - requestStart.tv_sec ) + ( requestEnd.tv_nsec - requestStart.tv_nsec ) / BILLION;
-   printf( "\nTime Taken:\n%lf seconds\n", accum );
-
-	 FILE * pfile;
-	    pfile = fopen("myfile.txt","w");
-   for(int j=0;j<largest-1;j++){
-     if(edges[j]!=0)
-     fprintf(pfile,"\n%d",D[j]);	
-     }
-	 fclose(pfile);
-/*
-   //Code Snippet taken from Jaiganesh, Jayadharini, Texas Tech University
-   N = largest;
-   int Unique[N];
-   for (int i = 0; i < N; i++) Unique[i] = 0;
-     for (int i = 0; i < N; i ++)
-     {
-       if (Unique[D[i]] == 0)
-         Unique[D[i]] = 1;
-     } 
-     
-   int count = 0;
-   for (int i = 0; i < N; i++)
-     count += Unique[i];
-   printf("\nUnique Components Count:%d",count);
-   */
-
    return 0;
 }
 

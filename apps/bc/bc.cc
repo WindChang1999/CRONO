@@ -138,6 +138,8 @@ void* do_work(void* args)
        node++;
        //printf("\n %d",next_source);
        pthread_mutex_unlock(&lock);
+       free(D);
+       free(Q);
    }
 
    pthread_barrier_wait(arg->barrier_total);

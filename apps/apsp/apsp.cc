@@ -102,6 +102,8 @@ void* do_work(void* args)
       pthread_mutex_lock(&lock);   //Vertex Capture
       node++;
       pthread_mutex_unlock(&lock);
+      free(D);
+      free(Q);
    }
 
    pthread_barrier_wait(arg->barrier_total);
@@ -160,7 +162,8 @@ int main(int argc, char** argv)
    pthread_barrier_init(&barrier_total, NULL, P1);
    pthread_barrier_init(&barrier, NULL, P1);
    pthread_mutex_init(&lock, NULL);
-
+   printf("# of thread: %d, nodes: %d, degree: %d, rt: %d\n",
+      P1, N, DEG, rt);
    //Thread Arguments
    for(int j = 0; j < P1; j++) {
       thread_arg[j].local_min  = local_min_buffer;
@@ -218,7 +221,10 @@ int main(int argc, char** argv)
       clock_gettime(CLOCK_REALTIME, &end);
       double runtime = ( end.tv_sec - start.tv_sec ) + 
          ( end.tv_nsec - start.tv_nsec ) / BILLION;
-      if (runtime > rt) break;
+      if (runtime > rt) {
+         // printf("END: runtime = %lf\n", runtime);
+         break;
+      }
    }
    return 0;
 }

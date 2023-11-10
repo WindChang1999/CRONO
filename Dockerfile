@@ -14,4 +14,6 @@ FROM centos:7.9.2009
 
 COPY --from=builder /app/build/* /home
 WORKDIR /home
+RUN curl -ssLO https://snap.stanford.edu/data/roadNet-CA.txt.gz && \
+    gunzip roadNet-CA.txt.gz
 CMD [ "bash" ]

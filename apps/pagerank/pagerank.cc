@@ -320,7 +320,7 @@ int main(int argc, char** argv)
         if (test1[i]==1) 
         nodecount++;
         }*/
-      printf("\nLargest Vertex: %d",nodecount);
+      // printf("\nLargest Vertex: %d",nodecount);
       N = nodecount;
    }
 

@@ -198,12 +198,14 @@ int main(int argc, char** argv)
    int select = atoi(argv[1]);
    const int P1 = atoi(argv[2]);
    iterations = atoi(argv[3]);
+   int rt = 0;
 
    //If graph to be read from file
    if(select==1)
    {
       const char *filename = argv[4];
       file0 = fopen(filename,"r");
+      if (argc > 5) rt = atoi(argv[5]);
    }
    
    //Matrix .mtx file
@@ -213,6 +215,7 @@ int main(int argc, char** argv)
      mtx(filename);
      //select = 1;
      file0 = fopen(conv_file,"r");
+     if (argc > 5) rt = atoi(argv[5]);
    }
 
    int lines_to_check=0;   //File reading variables
@@ -283,7 +286,7 @@ int main(int argc, char** argv)
       }
       free(temp);
 			
-      printf("\n .gr graph with parameters: Vertices:%d Degree:%d \n",N,DEG);
+      // printf("\n .gr graph with parameters: Vertices:%d Degree:%d \n",N,DEG);
    }
    
    if(select==2)
@@ -302,6 +305,7 @@ int main(int argc, char** argv)
       N = atoi(argv[4]);
       DEG = atoi(argv[5]);
       printf("\nGraph with Parameters: N:%d DEG:%d\n",N,DEG);
+      if (argc > 6) rt = atoi(argv[6]);
    }
 
    if (DEG > N)
@@ -430,7 +434,7 @@ int main(int argc, char** argv)
          }
       }
 			
-      printf("\nFile Read, Largest Vertex:%d",largest);
+      // printf("\nFile Read, Largest Vertex:%d",largest);
    }
 
    pthread_barrier_t barrier_total;
@@ -459,9 +463,6 @@ int main(int argc, char** argv)
          pthread_mutex_init(&locks[i], NULL);
    }
 
-   //Initialize data structures
-   initialize_single_source(D, Q, 0, largest);
-
    //Thread arguments
    for(int j = 0; j < P; j++) {
       thread_arg[j].Q          = Q;
@@ -481,48 +482,44 @@ int main(int argc, char** argv)
       thread_arg[j].barrier    = &barrier;
    }
   
-   printf("Largest Vertex:%d",largest); 
    //CPU clock
-   struct timespec requestStart, requestEnd;
-   clock_gettime(CLOCK_REALTIME, &requestStart);
+   struct timespec start, end;
+   clock_gettime(CLOCK_REALTIME, &start);
+   while (true) {
+      //Initialize data structures
+      initialize_single_source(D, Q, 0, largest);
+      struct timespec requestStart, requestEnd;
+      clock_gettime(CLOCK_REALTIME, &requestStart);
 
-   // Enable Graphite performance and energy models
-   //CarbonEnableModels();
+      // Enable Graphite performance and energy models
+      //CarbonEnableModels();
 
-   //Spawn threads
-   for(int j = 1; j < P; j++) {
-      pthread_create(thread_handle+j,
-            NULL,
-            do_work,
-            (void*)&thread_arg[j]);
+      //Spawn threads
+      for(int j = 1; j < P; j++) {
+         pthread_create(thread_handle+j,
+               NULL,
+               do_work,
+               (void*)&thread_arg[j]);
+      }
+      do_work((void*) &thread_arg[0]);  //main thread spawns itself
+
+      //Join threads
+      for(int j = 1; j < P; j++) { //mul = mul*2;
+         pthread_join(thread_handle[j],NULL);
+      }
+
+      // Disable Graphite performance and energy models
+      //CarbonDisableModels();
+
+      clock_gettime(CLOCK_REALTIME, &requestEnd);
+      double accum = ( requestEnd.tv_sec - requestStart.tv_sec ) + ( requestEnd.tv_nsec - requestStart.tv_nsec ) / BILLION;
+      printf( "%lf\n", accum );
+
+      clock_gettime(CLOCK_REALTIME, &end);
+      double runtime = ( end.tv_sec - start.tv_sec ) + 
+         ( end.tv_nsec - start.tv_nsec ) / BILLION;
+      if (runtime > rt) break;
    }
-   do_work((void*) &thread_arg[0]);  //main thread spawns itself
-
-   printf("\nThreads Returned!");
-
-   //Join threads
-   for(int j = 1; j < P; j++) { //mul = mul*2;
-      pthread_join(thread_handle[j],NULL);
-   }
-
-   // Disable Graphite performance and energy models
-   //CarbonDisableModels();
-
-   clock_gettime(CLOCK_REALTIME, &requestEnd);
-   double accum = ( requestEnd.tv_sec - requestStart.tv_sec ) + ( requestEnd.tv_nsec - requestStart.tv_nsec ) / BILLION;
-   printf( "\nTime:%lf seconds\n", accum );
-
-   //printf("\ndistance:%d \n",D[N-1]);
-
-   //Print Results
-   FILE * pfile;
-   pfile = fopen("myfile.txt","w");
-   for(int i = 0; i < largest; i++) {
-     if(edges[i]!=0)
-       fprintf(pfile,"\n %d %d ", i,comm[i]);
-   }
-   printf("\n");
-
    return 0;
 }
 

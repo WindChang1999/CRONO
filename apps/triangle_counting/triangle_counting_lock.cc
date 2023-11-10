@@ -183,6 +183,7 @@ int main(int argc, char** argv)
    int N = 0;
    int DEG = 0;
    int select = atoi(argv[1]);
+   int rt = 0;
 
    //For reading graph from text file
    if(select==1)
@@ -191,15 +192,17 @@ int main(int argc, char** argv)
       //printf("Please Enter The Name Of The File You Would Like To Fetch\n");
       //scanf("%s", filename);
       file0 = fopen(filename,"r");
+      if (argc > 4) rt = atoi(argv[4]);
    }
 
    //Matrix .mtx file
    if(select==2)
 	 {
-		 const char *filename = argv[3];
-     mtx(filename);
-     //select = 1;
-     file0 = fopen(conv_file,"r");
+		const char *filename = argv[3];
+      mtx(filename);
+      //select = 1;
+      file0 = fopen(conv_file,"r");
+      if (argc > 4) rt = atoi(argv[4]);
    }
 
    int lines_to_check=0;
@@ -269,7 +272,7 @@ int main(int argc, char** argv)
           DEG = temp[i];
       }
       free(temp);
-      printf("\n .gr graph with parameters: Vertices:%d Degree:%d \n",N,DEG);
+      // printf("\n .gr graph with parameters: Vertices:%d Degree:%d \n",N,DEG);
    }
 
 
@@ -290,6 +293,7 @@ int main(int argc, char** argv)
       N = atoi(argv[3]);
       DEG = atoi(argv[4]);
       printf("\nGraph with Parameters: N:%d DEG:%d\n",N,DEG);
+      if (argc > 5) rt = atoi(argv[5]);
    }
    if (DEG > N)
    {
@@ -386,7 +390,7 @@ int main(int argc, char** argv)
             //exist[number0]=1; exist[number1]=1;
          }
       }
-      printf("\nFile Read, Largest Vertex:%d",largest);
+      // printf("\nFile Read, Largest Vertex:%d",largest);
    }
 
    //For synthetic graphs
@@ -413,15 +417,7 @@ int main(int argc, char** argv)
          pthread_mutex_init(&locks[i], NULL);
    }
 
-   //Initialize 1-d arrays
-   if(select!=2)
-   {
-     initialize_single_source(D, Q, 0, largest);
-   }
-   else
-     initialize_single_source(D, Q, 0, largest);
-
-	 //Print Graph
+	//Print Graph
    /*printf("\n Printing Graph \n");
    for(int i=0;i<largest+1;i++)
    {
@@ -450,40 +446,46 @@ int main(int argc, char** argv)
       thread_arg[j].barrier_total = &barrier_total;
       thread_arg[j].barrier    = &barrier;
    }
+   struct timespec start, end;
+   clock_gettime(CLOCK_REALTIME, &start);
+   while (true) {
+      initialize_single_source(D, Q, 0, largest);
+      struct timespec requestStart, requestEnd;
+      clock_gettime(CLOCK_REALTIME, &requestStart);
 
-   struct timespec requestStart, requestEnd;
-   clock_gettime(CLOCK_REALTIME, &requestStart);
+      // Enable Graphite performance and energy models
+      //CarbonEnableModels();
 
-   // Enable Graphite performance and energy models
-   //CarbonEnableModels();
+      //Start Threads
+      for(int j = 1; j < P; j++) {
+         pthread_create(thread_handle+j,
+               NULL,
+               do_work,
+               (void*)&thread_arg[j]);
+      }
+      do_work((void*) &thread_arg[0]);
 
-   //Start Threads
-   for(int j = 1; j < P; j++) {
-      pthread_create(thread_handle+j,
-            NULL,
-            do_work,
-            (void*)&thread_arg[j]);
+      //Join Threads
+      for(int j = 1; j < P; j++) { //mul = mul*2;
+         pthread_join(thread_handle[j],NULL);
+      }
+
+      // Disable Graphite performance and energy models
+      //CarbonDisableModels();
+
+
+      //Print Time Taken
+      clock_gettime(CLOCK_REALTIME, &requestEnd);
+      double accum = ( requestEnd.tv_sec - requestStart.tv_sec ) + ( requestEnd.tv_nsec - requestStart.tv_nsec ) / BILLION;
+      printf( "%lf\n", accum );
+
+      // long long int count = Total_Tri;
+      // printf("\nTriangles=%lld \n",count); //%lld for long long int
+      clock_gettime(CLOCK_REALTIME, &end);
+      double runtime = ( end.tv_sec - start.tv_sec ) + 
+         ( end.tv_nsec - start.tv_nsec ) / BILLION;
+      if (runtime > rt) break;
    }
-   do_work((void*) &thread_arg[0]);
-
-   //Join Threads
-   for(int j = 1; j < P; j++) { //mul = mul*2;
-      pthread_join(thread_handle[j],NULL);
-   }
-
-   // Disable Graphite performance and energy models
-   //CarbonDisableModels();
-   
-   printf("\nThreads Joined!");
-
-   //Print Time Taken
-   clock_gettime(CLOCK_REALTIME, &requestEnd);
-   double accum = ( requestEnd.tv_sec - requestStart.tv_sec ) + ( requestEnd.tv_nsec - requestStart.tv_nsec ) / BILLION;
-   printf( "\nTime Taken:\n%lf seconds", accum );
-
-   long long int count = Total_Tri;
-   printf("\nTriangles=%lld \n",count); //%lld for long long int
-
    return 0;
 }
 

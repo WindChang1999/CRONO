@@ -129,7 +129,7 @@ void* do_work(void* args)
          }
       }
    //pthread_barrier_wait(arg->barrier_total);
-
+   free(stack);
    return NULL;
 }
 
